@@ -48,6 +48,36 @@ const emptyTask = {
   color: '#78d5ff',
 }
 
+function hslToHex(hue, saturation, lightness) {
+  const chroma = (1 - Math.abs((2 * lightness) / 100 - 1)) * (saturation / 100)
+  const x = chroma * (1 - Math.abs(((hue / 60) % 2) - 1))
+  const match = lightness / 100 - chroma / 2
+  const [red, green, blue] = hue < 60
+    ? [chroma, x, 0]
+    : hue < 120
+      ? [x, chroma, 0]
+      : hue < 180
+        ? [0, chroma, x]
+        : hue < 240
+          ? [0, x, chroma]
+          : hue < 300
+            ? [x, 0, chroma]
+            : [chroma, 0, x]
+  const toHex = (value) => Math.round((value + match) * 255).toString(16).padStart(2, '0')
+  return `#${toHex(red)}${toHex(green)}${toHex(blue)}`
+}
+
+function generateTaskColor(tasks) {
+  const usedColors = new Set(tasks.map((task) => task.color?.toLowerCase()).filter(Boolean))
+
+  for (let attempt = 0; attempt < 36; attempt += 1) {
+    const color = hslToHex(Math.floor(Math.random() * 360), 100, 50)
+    if (!usedColors.has(color)) return color
+  }
+
+  return hslToHex((tasks.length * 137.508) % 360, 100, 50)
+}
+
 function parseDueDate(value) {
   if (!value) return null
 
@@ -357,6 +387,7 @@ function App() {
       row: rowIndex,
       x,
       y,
+      color: generateTaskColor(tasks),
       dueDate: formatDateTimeLocal(dueDateFromY(y)),
     })
     setCaptureModal({ open: true, left, top, column: columnIndex, row: rowIndex, x, y })

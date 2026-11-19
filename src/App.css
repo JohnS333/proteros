@@ -238,7 +238,7 @@ select option { background: #15292a; }
 }
 .cell-1-2 { background-color: rgba(156, 232, 209, .04); }
 .empty-cell { display: grid; place-items: center; height: 100%; min-height: 0; color: rgba(156,171,173,.34); font-size: 11px; }
-.task-anchor { position: absolute; z-index: 3; left: var(--task-x); top: var(--task-y); width: 2%; height: 2%; min-width: 4px; min-height: 4px; background: var(--task-color); box-shadow: 0 0 8px var(--task-color); transform: translate(-25%, -25%); pointer-events: none; }
+.task-anchor { position: absolute; z-index: 3; left: var(--task-x); top: var(--task-y); width: 2%; height: 2%; min-width: 4px; min-height: 4px; background: var(--task-color); box-shadow: 0 0 3px var(--task-color); transform: translate(-25%, -25%); pointer-events: none; }
 .task-card { position: absolute; z-index: 2; left: var(--task-x); top: var(--task-y); display: flex; align-items: center; gap: 5px; width: fit-content; max-width: calc(100% - 8px); height: 30px; padding: 4px 5px 4px 8px; border: 1px solid var(--line); border-left: 3px solid var(--task-color); border-radius: 5px; background: rgba(19, 38, 39, .98); box-shadow: 0 6px 14px rgba(0,0,0,.22); cursor: grab; touch-action: none; user-select: none; }
 .task-card.is-dragging { z-index: 10; cursor: grabbing; box-shadow: 0 10px 22px rgba(0,0,0,.36); }
 .task-card-top { display: flex; align-items: center; gap: 7px; color: var(--muted); font-size: 9px; text-transform: uppercase; letter-spacing: .1em; }
