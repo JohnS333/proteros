@@ -1,5 +1,6 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import './App.css'
+import eisenhowerMatrixSquare from './assets/EisenhowerMatrixSquare.jpg'
 
 const STORAGE_KEY = 'proteros.eisenhowerDashboard.v1'
 
@@ -10,8 +11,8 @@ const columns = [
 ]
 
 const rows = [
-  { name: 'Urgent' },
-  { name: 'Not urgent' },
+  { name: 'Urgent', timeframes: ['1 Day', '1 Wk', '2 Wk', '3 Wk', '1 Mth'] },
+  { name: 'Not urgent', timeframes: [] },
 ]
 
 const emptyTask = {
@@ -20,6 +21,8 @@ const emptyTask = {
   dueDate: '',
   column: 0,
   row: 0,
+  x: 25,
+  y: 25,
   color: '#78d5ff',
 }
 
@@ -69,6 +72,10 @@ function App() {
   const [form, setForm] = useState(emptyTask)
   const [editingId, setEditingId] = useState(null)
   const [message, setMessage] = useState('')
+  const [captureModal, setCaptureModal] = useState(null)
+  const [draggingId, setDraggingId] = useState(null)
+  const dragFrame = useRef(null)
+  const activeDrag = useRef(null)
 
   useEffect(() => {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(tasks))
@@ -90,6 +97,8 @@ function App() {
   function resetForm() {
     setForm(emptyTask)
     setEditingId(null)
+    setCaptureModal(null)
+    setMessage('')
   }
 
   function submitTask(event) {
@@ -120,16 +129,98 @@ function App() {
       dueDate: task.dueDate || '',
       column: task.column,
       row: task.row,
+      x: Number.isInteger(task.x) ? task.x : 25,
+      y: Number.isInteger(task.y) ? task.y : 25,
       color: task.color || '#78d5ff',
     })
     setEditingId(task.id)
-    window.scrollTo({ top: 0, behavior: 'smooth' })
+    setCaptureModal({
+      open: true,
+      left: Math.max(12, Math.min(window.innerWidth - 380, window.innerWidth / 2 - 180)),
+      top: Math.max(12, Math.min(window.innerHeight - 520, window.innerHeight / 2 - 260)),
+      column: task.column,
+      row: task.row,
+    })
+  }
+
+  function openCaptureModal(event, rowIndex, columnIndex) {
+    const bounds = event.currentTarget.getBoundingClientRect()
+    const x = Math.max(0, Math.min(49, Math.round(((event.clientX - bounds.left) / bounds.width) * 49)))
+    const y = Math.max(0, Math.min(49, Math.round(((event.clientY - bounds.top) / bounds.height) * 49)))
+    const modalWidth = 360
+    const modalHeight = 500
+    const left = Math.max(12, Math.min(window.innerWidth - modalWidth - 12, event.clientX + 10))
+    const top = Math.max(12, Math.min(window.innerHeight - modalHeight - 12, event.clientY + 10))
+
+    setEditingId(null)
+    setMessage('')
+    setForm({
+      ...emptyTask,
+      column: columnIndex,
+      row: rowIndex,
+      x,
+      y,
+    })
+    setCaptureModal({ open: true, left, top, column: columnIndex, row: rowIndex, x, y })
   }
 
   function deleteTask(id) {
     setTasks((current) => current.filter((task) => task.id !== id))
     if (editingId === id) resetForm()
     setMessage('Task removed.')
+  }
+
+  function startTaskDrag(event, task) {
+    if (event.button !== 0 || event.target.closest('button')) return
+
+    event.preventDefault()
+    event.stopPropagation()
+    activeDrag.current = { id: task.id }
+    setDraggingId(task.id)
+
+    const moveTask = (moveEvent) => {
+      if (!activeDrag.current) return
+      if (dragFrame.current) cancelAnimationFrame(dragFrame.current)
+
+      dragFrame.current = requestAnimationFrame(() => {
+        const targetCell = Array.from(document.querySelectorAll('.matrix-cell')).find((cell) => {
+          const bounds = cell.getBoundingClientRect()
+          return moveEvent.clientX >= bounds.left &&
+            moveEvent.clientX <= bounds.right &&
+            moveEvent.clientY >= bounds.top &&
+            moveEvent.clientY <= bounds.bottom
+        })
+
+        if (!targetCell) return
+
+        const bounds = targetCell.getBoundingClientRect()
+        const x = Math.max(0, Math.min(49, Math.round(((moveEvent.clientX - bounds.left) / bounds.width) * 49)))
+        const y = Math.max(0, Math.min(49, Math.round(((moveEvent.clientY - bounds.top) / bounds.height) * 49)))
+        const row = Number(targetCell.dataset.row)
+        const column = Number(targetCell.dataset.column)
+
+        setTasks((current) =>
+          current.map((item) =>
+            item.id === activeDrag.current?.id
+              ? { ...item, x, y, row, column }
+              : item,
+          ),
+        )
+      })
+    }
+
+    const stopTaskDrag = () => {
+      if (dragFrame.current) cancelAnimationFrame(dragFrame.current)
+      activeDrag.current = null
+      setDraggingId(null)
+      window.removeEventListener('pointermove', moveTask)
+      window.removeEventListener('pointerup', stopTaskDrag)
+      window.removeEventListener('pointercancel', stopTaskDrag)
+    }
+
+    window.addEventListener('pointermove', moveTask)
+    window.addEventListener('pointerup', stopTaskDrag)
+    window.addEventListener('pointercancel', stopTaskDrag)
   }
 
   function exportTasks() {
@@ -176,51 +267,6 @@ function App() {
               </div>
             </div>
           </div>
-
-          <section className="task-panel" aria-labelledby="task-form-title">
-            <div className="panel-heading">
-              <div>
-                <p className="eyebrow">Task capture</p>
-                <h2 id="task-form-title">{editingId ? 'Edit task' : 'Add a task'}</h2>
-              </div>
-              {editingId && <button className="text-button" type="button" onClick={resetForm}>Cancel</button>}
-            </div>
-            <form onSubmit={submitTask}>
-              <label>
-                Title
-                <input name="title" value={form.title} onChange={updateField} placeholder="What needs your attention?" maxLength="120" />
-              </label>
-              <label>
-                Notes
-                <textarea name="notes" value={form.notes} onChange={updateField} placeholder="Context, links, or next steps" rows="2" />
-              </label>
-              <div className="form-grid">
-                <label>Priority
-                  <select name="column" value={form.column} onChange={updateField}>
-                    {columns.map((column, index) => <option value={index} key={column.name}>{column.name}</option>)}
-                  </select>
-                </label>
-                <label>Urgency
-                  <select name="row" value={form.row} onChange={updateField}>
-                    {rows.map((row, index) => <option value={index} key={row.name}>{row.name}</option>)}
-                  </select>
-                </label>
-              </div>
-              <div className="form-grid">
-                <label>Due date
-                  <input name="dueDate" type="date" value={form.dueDate} onChange={updateField} />
-                </label>
-                <label>Color
-                  <input className="color-input" name="color" type="color" value={form.color} onChange={updateField} />
-                </label>
-              </div>
-              <div className="form-actions">
-                <button className="primary-button" type="submit">{editingId ? 'Update task' : 'Add task'}</button>
-                <button className="secondary-button" type="button" onClick={resetForm}>Clear</button>
-              </div>
-              {message && <p className="form-message" role="status">{message}</p>}
-            </form>
-          </section>
         </section>
 
         <section className="board-panel" id="matrix" aria-labelledby="matrix-title">
@@ -228,7 +274,6 @@ function App() {
             <div>
               <h2 id="matrix-title">Advanced Eisenhower Matrix</h2>
             </div>
-            <p className="board-hint">Drag the noise out of your head and into a plan.</p>
           </div>
           <div className="matrix-shell">
             <div className="matrix-axis matrix-axis-importance" aria-label="Importance">
@@ -244,22 +289,58 @@ function App() {
               {columns.map((column) => <div className="column-label" key={column.name}><span>{column.short}</span><strong>{column.name.replace('', '')}</strong></div>)}
               {rows.map((row, rowIndex) => (
                 <div className="matrix-row" key={row.name}>
-                  <div className="row-label"><strong>{row.name}</strong><span>{row.description}</span></div>
+                  <div className="row-label">
+                    <strong>{row.name}</strong>
+                    {row.timeframes.length > 0 && (
+                      <div className="urgency-timescale" aria-label="Urgency time frame">
+                        {row.timeframes.map((timeframe) => (
+                          <span key={timeframe}>{timeframe}</span>
+                        ))}
+                      </div>
+                    )}
+                  </div>
                   {columns.map((column, columnIndex) => {
                     const cellTasks = tasks.filter((task) => task.row === rowIndex && task.column === columnIndex)
                     return (
-                      <div className={`matrix-cell cell-${rowIndex}-${columnIndex}`} key={column.name}>
+                      <div
+                        className={`matrix-cell cell-${rowIndex}-${columnIndex}`}
+                        key={column.name}
+                        data-row={rowIndex}
+                        data-column={columnIndex}
+                        style={rowIndex === 0 && columnIndex === 0
+                          ? { '--eisenhower-grid': `url("${eisenhowerMatrixSquare}")` }
+                          : undefined}
+                        onDoubleClick={(event) => openCaptureModal(event, rowIndex, columnIndex)}
+                      >
                         {cellTasks.map((task) => (
-                          <article className="task-card" style={{ '--task-color': task.color }} key={task.id}>
-                            <div className="task-card-top">
-                              <span className="task-dot" />
-                              <span className="task-category">{column.short}</span>
-                              <button type="button" onClick={() => deleteTask(task.id)} aria-label={`Delete ${task.title}`}>×</button>
-                            </div>
+                          <article
+                            className={`task-card${draggingId === task.id ? ' is-dragging' : ''}`}
+                            style={{
+                              '--task-color': task.color,
+                              '--task-x': `${((Number.isInteger(task.x) ? task.x : 25) / 49) * 100}%`,
+                              '--task-y': `${((Number.isInteger(task.y) ? task.y : 25) / 49) * 100}%`,
+                            }}
+                            key={task.id}
+                            onPointerDown={(event) => startTaskDrag(event, task)}
+                            onDoubleClick={(event) => event.stopPropagation()}
+                            title="Drag task on the matrix"
+                          >
                             <h3>{task.title}</h3>
-                            {task.notes && <p>{task.notes}</p>}
-                            {task.dueDate && <time dateTime={task.dueDate}>Due {task.dueDate}</time>}
-                            <button className="edit-link" type="button" onClick={() => editTask(task)}>Edit task</button>
+                            <button
+                              className="edit-link"
+                              type="button"
+                              onPointerDown={(event) => event.stopPropagation()}
+                              onClick={(event) => {
+                                event.stopPropagation()
+                                editTask(task)
+                              }}
+                              aria-label={`Edit ${task.title}`}
+                              title={`Edit ${task.title}`}
+                            >
+                              <svg viewBox="0 0 24 24" aria-hidden="true">
+                                <path d="M4 20h4l10.7-10.7a2 2 0 0 0-4-4L4 16v4Zm12.7-13.3 2.6 2.6" />
+                              </svg>
+                            </button>
                           </article>
                         ))}
                         {cellTasks.length === 0 && <span className="empty-cell">Double Click to add task</span>}
@@ -278,6 +359,64 @@ function App() {
           <p>Use the matrix to protect deep work, schedule important plans, and make room for the work that moves you forward.</p>
         </section>
       </main>
+
+      {captureModal && (
+        <div
+          className="capture-modal"
+          style={{ left: captureModal.left, top: captureModal.top }}
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="task-form-title"
+        >
+          <div className="panel-heading">
+            <div>
+              <p className="eyebrow">Task capture</p>
+              <h2 id="task-form-title">{editingId ? 'Edit task' : 'Add a task'}</h2>
+            </div>
+            <button className="modal-close" type="button" onClick={resetForm} aria-label="Close task capture">×</button>
+          </div>
+          <form onSubmit={submitTask}>
+            <label>
+              Title
+              <input name="title" value={form.title} onChange={updateField} placeholder="What needs your attention?" maxLength="120" autoFocus />
+            </label>
+            <label>
+              Notes
+              <textarea name="notes" value={form.notes} onChange={updateField} placeholder="Context, links, or next steps" rows="2" />
+            </label>
+            <div className="form-grid">
+              <label>Priority
+                <select name="column" value={form.column} onChange={updateField}>
+                  {columns.map((column, index) => <option value={index} key={column.name}>{column.name}</option>)}
+                </select>
+              </label>
+              <label>Urgency
+                <select name="row" value={form.row} onChange={updateField}>
+                  {rows.map((row, index) => <option value={index} key={row.name}>{row.name}</option>)}
+                </select>
+              </label>
+            </div>
+            <div className="form-grid">
+              <label>Due date
+                <input name="dueDate" type="date" value={form.dueDate} onChange={updateField} />
+              </label>
+              <label>Color
+                <input className="color-input" name="color" type="color" value={form.color} onChange={updateField} />
+              </label>
+            </div>
+            <p className="coordinate-readout">Coordinates: X {form.x} / Y {form.y}</p>
+            <div className="form-actions">
+              <button className="primary-button" type="submit">{editingId ? 'Update task' : 'Add task'}</button>
+              <button className="secondary-button" type="button" onClick={resetForm}>Cancel</button>
+              {editingId && (
+                <button className="delete-button" type="button" onClick={() => deleteTask(editingId)}>Delete</button>
+              )}
+            </div>
+            {message && <p className="form-message" role="status">{message}</p>}
+          </form>
+        </div>
+      )}
+
       <footer>PROTEROS <span>— your next right move</span></footer>
     </div>
   )
