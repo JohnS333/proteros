@@ -21,6 +21,13 @@ The due date is stored on the task as an ISO timestamp. A task created by double
 After creation, an urgent task's displayed Y position is calculated from its due date and the current time rather than remaining fixed. The dashboard refreshes this calculation every minute, so tasks move upward as their deadlines approach. Overdue tasks clamp to the top (`Y=0`), and tasks more than 30 days away clamp to the bottom (`Y=49`). Dragging an urgent task changes both its Y coordinate and due date; editing the due date likewise changes its displayed Y position when the task is saved. The X coordinate and importance-column behavior are independent of this time calculation. Tasks in the non-urgent row retain their manually positioned Y coordinate.
 
 
+
+
+
+
+// DEVELOPMENT
+
+
 # React + Vite
 
 This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
@@ -37,3 +44,19 @@ The React Compiler is not enabled on this template because of its impact on dev 
 ## Expanding the ESLint configuration
 
 If you are developing a production application, we recommend using TypeScript with type-aware lint rules enabled. Check out the [TS template](https://github.com/vitejs/vite/tree/main/packages/create-vite/template-react-ts) for information on how to integrate TypeScript and [`typescript-eslint`](https://typescript-eslint.io) in your project.
+
+
+FAQ:
+What happens to the user's existing data when we update the data model for tasks (the json structure)?
+
+Existing task data is stored in the browser’s localStorage under proteros.eisenhowerDashboard.v1 (App.jsx:4).
+
+When the task model changes:
+
+Existing JSON records are loaded unchanged; there is no migration or schema-version conversion (App.jsx:187).
+Missing fields generally use UI fallbacks—for example, default coordinates, notes, or color when editing/displaying tasks.
+Updated tasks retain their existing fields and receive the new values when edited (App.jsx:307).
+If the storage key or data format is deliberately changed, old data will no longer be loaded automatically.
+If stored JSON is malformed, the app treats it as an empty task list and then overwrites storage, which can discard the unreadable data (App.jsx:188).
+Users can manually preserve their data using the JSON export feature (App.jsx:430).
+So, there is currently no formal migration strategy; compatible old records remain, but incompatible schema changes could require adding migration logic.

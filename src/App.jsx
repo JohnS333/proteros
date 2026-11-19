@@ -16,6 +16,7 @@ const rows = [
 ]
 
 const MAX_COORDINATE = 49
+const GRID_SIZE = MAX_COORDINATE + 1
 
 const COMPLETION_CATEGORY_ORDER = [
   { row: 0, column: 0, label: 'Urgent × Must do' },
@@ -45,6 +46,36 @@ const emptyTask = {
   x: 25,
   y: 25,
   color: '#78d5ff',
+}
+
+function hslToHex(hue, saturation, lightness) {
+  const chroma = (1 - Math.abs((2 * lightness) / 100 - 1)) * (saturation / 100)
+  const x = chroma * (1 - Math.abs(((hue / 60) % 2) - 1))
+  const match = lightness / 100 - chroma / 2
+  const [red, green, blue] = hue < 60
+    ? [chroma, x, 0]
+    : hue < 120
+      ? [x, chroma, 0]
+      : hue < 180
+        ? [0, chroma, x]
+        : hue < 240
+          ? [0, x, chroma]
+          : hue < 300
+            ? [x, 0, chroma]
+            : [chroma, 0, x]
+  const toHex = (value) => Math.round((value + match) * 255).toString(16).padStart(2, '0')
+  return `#${toHex(red)}${toHex(green)}${toHex(blue)}`
+}
+
+function generateTaskColor(tasks) {
+  const usedColors = new Set(tasks.map((task) => task.color?.toLowerCase()).filter(Boolean))
+
+  for (let attempt = 0; attempt < 36; attempt += 1) {
+    const color = hslToHex(Math.floor(Math.random() * 360), 100, 50)
+    if (!usedColors.has(color)) return color
+  }
+
+  return hslToHex((tasks.length * 137.508) % 360, 100, 50)
 }
 
 function parseDueDate(value) {
@@ -341,8 +372,8 @@ function App() {
 
   function openCaptureModal(event, rowIndex, columnIndex) {
     const bounds = event.currentTarget.getBoundingClientRect()
-    const x = Math.max(0, Math.min(49, Math.round(((event.clientX - bounds.left) / bounds.width) * 49)))
-    const y = Math.max(0, Math.min(49, Math.round(((event.clientY - bounds.top) / bounds.height) * 49)))
+    const x = Math.max(0, Math.min(MAX_COORDINATE, Math.floor(((event.clientX - bounds.left) / bounds.width) * GRID_SIZE)))
+    const y = Math.max(0, Math.min(MAX_COORDINATE, Math.floor(((event.clientY - bounds.top) / bounds.height) * GRID_SIZE)))
     const modalWidth = 360
     const modalHeight = 500
     const left = Math.max(12, Math.min(window.innerWidth - modalWidth - 12, event.clientX + 10))
@@ -356,6 +387,7 @@ function App() {
       row: rowIndex,
       x,
       y,
+      color: generateTaskColor(tasks),
       dueDate: formatDateTimeLocal(dueDateFromY(y)),
     })
     setCaptureModal({ open: true, left, top, column: columnIndex, row: rowIndex, x, y })
@@ -372,7 +404,12 @@ function App() {
 
     event.preventDefault()
     event.stopPropagation()
-    activeDrag.current = { id: task.id }
+    const cardBounds = event.currentTarget.getBoundingClientRect()
+    activeDrag.current = {
+      id: task.id,
+      offsetX: event.clientX - cardBounds.left,
+      offsetY: event.clientY - cardBounds.top,
+    }
     setDraggingId(task.id)
 
     const moveTask = (moveEvent) => {
@@ -391,8 +428,13 @@ function App() {
         if (!targetCell) return
 
         const bounds = targetCell.getBoundingClientRect()
-        const x = Math.max(0, Math.min(49, Math.round(((moveEvent.clientX - bounds.left) / bounds.width) * 49)))
-        const y = Math.max(0, Math.min(49, Math.round(((moveEvent.clientY - bounds.top) / bounds.height) * 49)))
+        const drag = activeDrag.current
+        const x = Math.max(0, Math.min(49, Math.round(
+          ((moveEvent.clientX - (drag?.offsetX || 0) - bounds.left) / bounds.width) * GRID_SIZE,
+        )))
+        const y = Math.max(0, Math.min(49, Math.round(
+          ((moveEvent.clientY - (drag?.offsetY || 0) - bounds.top) / bounds.height) * GRID_SIZE,
+        )))
         const row = Number(targetCell.dataset.row)
         const column = Number(targetCell.dataset.column)
 
@@ -519,35 +561,46 @@ function App() {
                           onDoubleClick={(event) => openCaptureModal(event, rowIndex, columnIndex)}
                         >
                           {cellTasks.map((task) => (
-                            <article
-                              className={`task-card${draggingId === task.id ? ' is-dragging' : ''}`}
-                              style={{
-                                '--task-color': task.color,
-                                '--task-x': `${((Number.isInteger(task.x) ? task.x : 25) / 49) * 100}%`,
-                                '--task-y': `${(taskY(task, currentTime) / MAX_COORDINATE) * 100}%`,
-                              }}
-                              key={task.id}
-                              onPointerDown={(event) => startTaskDrag(event, task)}
-                              onDoubleClick={(event) => event.stopPropagation()}
-                              title="Drag task on the matrix"
-                            >
-                              <h3>{task.title}</h3>
-                              <button
-                                className="edit-link"
-                                type="button"
-                                onPointerDown={(event) => event.stopPropagation()}
-                                onClick={(event) => {
-                                  event.stopPropagation()
-                                  editTask(task)
+                            <div key={task.id}>
+                              <span
+                                className="task-anchor"
+                                style={{
+                                  '--task-color': task.color,
+                                  '--task-x': `${((Number.isInteger(task.x) ? task.x : 25) / GRID_SIZE) * 100}%`,
+                                  '--task-y': `${(taskY(task, currentTime) / GRID_SIZE) * 100}%`,
                                 }}
-                                aria-label={`Edit ${task.title}`}
-                                title={`Edit ${task.title}`}
+                                aria-hidden="true"
                               >
-                                <svg viewBox="0 0 24 24" aria-hidden="true">
-                                  <path d="M4 20h4l10.7-10.7a2 2 0 0 0-4-4L4 16v4Zm12.7-13.3 2.6 2.6" />
-                                </svg>
-                              </button>
-                            </article>
+                              </span>
+                              <article
+                                className={`task-card${draggingId === task.id ? ' is-dragging' : ''}`}
+                                style={{
+                                  '--task-color': task.color,
+                                  '--task-x': `${((Number.isInteger(task.x) ? task.x : 25) / GRID_SIZE) * 100}%`,
+                                  '--task-y': `${(taskY(task, currentTime) / GRID_SIZE) * 100}%`,
+                                }}
+                                onPointerDown={(event) => startTaskDrag(event, task)}
+                                onDoubleClick={(event) => event.stopPropagation()}
+                                title="Drag task on the matrix"
+                              >
+                                <h3>{task.title}</h3>
+                                <button
+                                  className="edit-link"
+                                  type="button"
+                                  onPointerDown={(event) => event.stopPropagation()}
+                                  onClick={(event) => {
+                                    event.stopPropagation()
+                                    editTask(task)
+                                  }}
+                                  aria-label={`Edit ${task.title}`}
+                                  title={`Edit ${task.title}`}
+                                >
+                                  <svg viewBox="0 0 24 24" aria-hidden="true">
+                                    <path d="M4 20h4l10.7-10.7a2 2 0 0 0-4-4L4 16v4Zm12.7-13.3 2.6 2.6" />
+                                  </svg>
+                                </button>
+                              </article>
+                            </div>
                           ))}
                           {cellTasks.length === 0 && <span className="empty-cell">Double Click to add task</span>}
                         </div>
