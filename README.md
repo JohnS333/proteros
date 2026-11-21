@@ -20,15 +20,57 @@ The due date is stored on the task as an ISO timestamp. A task created by double
 
 After creation, an urgent task's displayed Y position is calculated from its due date and the current time rather than remaining fixed. The dashboard refreshes this calculation every minute, so tasks move upward as their deadlines approach. Overdue tasks clamp to the top (`Y=0`), and tasks more than 30 days away clamp to the bottom (`Y=49`). Dragging an urgent task changes both its Y coordinate and due date; editing the due date likewise changes its displayed Y position when the task is saved. The X coordinate and importance-column behavior are independent of this time calculation. Tasks in the non-urgent row retain their manually positioned Y coordinate.
 
+## Frontend data flow
+
+The application keeps task records in React state, derives the matrix and priority views from those records, and persists the state to browser `localStorage`.
+
+```mermaid
+flowchart LR
+    subgraph UI[Frontend UI]
+        Capture[Task capture and edit modal]
+        Matrix[Advanced Eisenhower Matrix]
+        MatrixActions[Double-click, drag, edit, or delete]
+        Completion[Task completion order]
+        Import[Import JSON button]
+        Export[Export JSON button]
+        ImportFile[Selected JSON file]
+    end
+
+    subgraph Model[Task data model]
+        Task[Task record]
+        Fields[Task fields include id, title, notes, dueDate, row, column, x, y, color, and createdAt]
+        State[React tasks state]
+        Derived[Derived coordinates and priority order]
+    end
+
+    subgraph Storage[Browser storage]
+        LocalStorage[localStorage key: proteros.eisenhowerDashboard.v1]
+        JSONExport[proteros-tasks.json]
+    end
+
+    Capture -->|Create or update values| Task
+    MatrixActions -->|Update task fields or coordinates| Task
+    Task --> Fields
+    Fields --> State
+    LocalStorage -->|JSON.parse on app startup| State
+    State -->|JSON.stringify after every state change| LocalStorage
+    State --> Derived
+    Derived -->|Urgency, importance, and due-date calculations| Matrix
+    Derived -->|Sorted completion bands and sections| Completion
+    State --> Export
+    Export -->|JSON blob: version 1 and tasks| JSONExport
+    Import --> ImportFile
+    ImportFile -->|Parse and normalize task records| State
+    State -->|Validated tasks replace existing React state| Derived
+```
+
+The export format is an object containing `version: 1` and the current `tasks` array. Import accepts that export format or a top-level task array. It validates and normalizes task records, replaces the React task state with valid tasks, and lets the existing `useEffect` persist the replacement to `localStorage`.
 
 
 
 
 
-// DEVELOPMENT
-
-
-# React + Vite
+# DEVELOPMENT - React + Vite
 
 This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
 
