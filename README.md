@@ -1,5 +1,5 @@
 # Proteros
-use of custom Advanced Eisenhower Matrix to prioritize tasks and foci on Urgency, Importance, and Various other factors
+Use of custom Advanced Eisenhower Matrix to prioritize tasks and foci on Urgency, Importance, and Various other factors
 
 
 The whole ideas is that each quadrant has a set of coordinates 50x50 that denote where EXACTLY on the urgency scale and Importance scale the task lies. 
