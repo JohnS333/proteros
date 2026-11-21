@@ -214,6 +214,60 @@ function createTask(values) {
   }
 }
 
+function createId() {
+  return crypto.randomUUID?.() ?? `${Date.now()}-${Math.random()}`
+}
+
+function normalizeImportedTask(task, usedIds) {
+  if (!task || typeof task !== 'object' || Array.isArray(task)) return null
+  if (typeof task.title !== 'string' || !task.title.trim()) return null
+
+  const row = task.row === 1 ? 1 : 0
+  const column = Number.isInteger(task.column)
+    ? Math.max(0, Math.min(2, task.column))
+    : 0
+  const x = Number.isInteger(task.x)
+    ? Math.max(0, Math.min(MAX_COORDINATE, task.x))
+    : 25
+  const y = Number.isInteger(task.y)
+    ? Math.max(0, Math.min(MAX_COORDINATE, task.y))
+    : 25
+
+  let id = typeof task.id === 'string' && task.id.trim()
+    ? task.id.trim()
+    : createId()
+  if (usedIds.has(id)) id = createId()
+  usedIds.add(id)
+
+  const dueDateValue = typeof task.dueDate === 'string'
+    ? new Date(task.dueDate)
+    : null
+  const dueDate = dueDateValue && !Number.isNaN(dueDateValue.getTime())
+    ? dueDateValue.toISOString()
+    : row === 0
+      ? dueDateFromY(y)
+      : ''
+
+  const createdAtValue = typeof task.createdAt === 'string'
+    ? new Date(task.createdAt)
+    : null
+
+  return {
+    id,
+    title: task.title.trim(),
+    notes: typeof task.notes === 'string' ? task.notes : '',
+    dueDate,
+    row,
+    column,
+    x,
+    y: row === 0 ? yFromDueDate(dueDate) : y,
+    color: /^#[0-9a-f]{6}$/i.test(task.color || '') ? task.color : '#78d5ff',
+    createdAt: createdAtValue && !Number.isNaN(createdAtValue.getTime())
+      ? createdAtValue.toISOString()
+      : new Date().toISOString(),
+  }
+}
+
 function App() {
   const [tasks, setTasks] = useState(() => {
     try {
@@ -229,6 +283,8 @@ function App() {
   const [captureModal, setCaptureModal] = useState(null)
   const [draggingId, setDraggingId] = useState(null)
   const [currentTime, setCurrentTime] = useState(() => Date.now())
+  const [importMessage, setImportMessage] = useState('')
+  const importInput = useRef(null)
   const dragFrame = useRef(null)
   const activeDrag = useRef(null)
 
@@ -482,6 +538,49 @@ function App() {
     setMessage('Your task list was exported.')
   }
 
+  async function importTasks(event) {
+    const file = event.target.files?.[0]
+    if (!file) return
+
+    try {
+      const parsed = JSON.parse(await file.text())
+      const importedRecords = Array.isArray(parsed)
+        ? parsed
+        : parsed && typeof parsed === 'object'
+          ? parsed.tasks
+          : null
+
+      if (!Array.isArray(importedRecords)) {
+        throw new Error('The JSON file must contain a tasks array.')
+      }
+
+      const usedIds = new Set()
+      const normalizedTasks = []
+      let skippedTasks = 0
+
+      importedRecords.forEach((record) => {
+        const normalizedTask = normalizeImportedTask(record, usedIds)
+        if (normalizedTask) normalizedTasks.push(normalizedTask)
+        else skippedTasks += 1
+      })
+
+      if (normalizedTasks.length === 0) {
+        throw new Error('The JSON file does not contain any valid tasks.')
+      }
+
+      setTasks(normalizedTasks)
+      setImportMessage(
+        skippedTasks > 0
+          ? `Imported ${normalizedTasks.length} tasks; skipped ${skippedTasks} invalid tasks.`
+          : `Imported ${normalizedTasks.length} tasks.`,
+      )
+    } catch (error) {
+      setImportMessage(error instanceof Error ? error.message : 'The JSON file could not be imported.')
+    } finally {
+      event.target.value = ''
+    }
+  }
+
   return (
     <div className="app-shell">
       <header className="topbar">
@@ -509,9 +608,20 @@ function App() {
               <div><span>Urgent tasks</span><strong>{urgentCount}</strong></div>
               <div className="data-location">
                 <div><span>Where Your Data is</span><strong className="saved">Saved locally on Browser</strong></div>
-                <button className="export-button" type="button" onClick={exportTasks}>Export (JSON)</button>
+                <div className="data-actions">
+                  <input
+                    ref={importInput}
+                    className="visually-hidden"
+                    type="file"
+                    accept="application/json,.json"
+                    onChange={importTasks}
+                  />
+                  <button className="export-button" type="button" onClick={() => importInput.current?.click()}>Import (JSON)</button>
+                  <button className="export-button" type="button" onClick={exportTasks}>Export (JSON)</button>
+                </div>
               </div>
             </div>
+            {importMessage && <p className="import-message" role="status">{importMessage}</p>}
           </div>
         </section>
 
