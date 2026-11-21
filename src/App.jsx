@@ -601,7 +601,7 @@ function App() {
             <h1>Perfect Prioritization</h1>
             <p className="intro">
               A clearer way to sort your work across urgency and importance.
-              Put every task in its place, then you get the next best move.
+              Put every task in its place, then get the most balanced order of execution.
             </p>
             <div className="stats">
               <div><span>Total tasks</span><strong>{tasks.length}</strong></div>
@@ -758,9 +758,8 @@ function App() {
         </div>
 
         <section className="about-strip" id="about">
-          <p className="eyebrow">The Proteros method</p>
-          <h2>Urgency is a signal, not a strategy.</h2>
-          <p>Use the matrix to protect deep work, schedule important plans, and make room for the work that moves you forward.</p>
+          <p className="eyebrow">About Proteros</p>
+          <p>We took the Eisenhower matrix, expanded it, and balanced urgency with importance via an ellyptic curve. So Urgency is valued more and more as it approaches deadlines</p>
         </section>
       </main>
 
